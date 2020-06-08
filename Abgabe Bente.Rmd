@@ -1,0 +1,339 @@
+---
+title: "Data Viz Projekt SS2020"
+author: "Bente Schönfelder (Matrikelnr. 936866)"
+date: "5.6.2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+### Bibliotheken: 
+library(tidyverse)  
+library(dplyr)  
+library(ggplot2)  
+library(extrafont)  
+library(stringr) 
+library(ggrepel)
+```{r,echo=FALSE, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(extrafont)
+library(stringr)
+```
+# Dänemark oder Deutschland
+## In welchem Land lebt es sich besser?
+
+Mein Projektthema ist der Vergleich der Länder Dänemark und Deutschland mithilfe verschiedener grafischer Darstellungen. Anhand verschiedener für mich persönlich relevanter Indikatoren möchte ich herausfinden, ob ich nach Dänemark auswandern sollte. Teilweise setze ich die Länder in einen Kontext mit anderen europäischen Ländern. Denn so sehr unterscheidet sich unser Nachbarland von uns schließlich doch nicht. 
+
+Meine Datenbasis habe ich mir aus verschiedenen Tabellen der Gapminder-Seite selbst zusammengebaut (https://www.gapminder.org/data/). 
+
+## Die Datengrundlage
+
+In einem iterativen Prozess habe ich die einzelnen Tabellen jeweils als csv. Datei von Gapminder heruntergeladen. Zum Teil habe ich bereits in Excel den Datensatz auf die relevanten Länder eingegrenzt. Anschließend habe ich sie eingelesen, benannt, pivotisiert, die Tabellen zusammengefügt, die Jahreszahlen glattgezogen und den Datensatz auf 1970-2019 eingegrenzt. Allerdings bleiben auch in diesem engen Zeitrahmen viele Werte nicht verfügbar.
+
+Datenbeschaffung 1 - Daten zum Vergleich von Dänemark und Deutschland:
+
+```{r,echo=TRUE}
+pop.tot <- read.csv("population_total.csv")                           ## Vergleichswert 1: population.total ##
+pop.tot <- pop.tot %>% 
+  pivot_longer(-`country`, names_to = "Year", values_to = "population" )
+
+life.exp <- read.csv("life_expectancy_years.csv")                    ## Vergleichswert 2: life expectancy ## 
+life.exp <- life.exp %>% 
+  pivot_longer(-`country`, names_to = "Year", values_to = "life.expect")
+
+income.pp <- read.csv("income_per_person.csv")                        ## Vergleichswert 3: income per person ##
+income.pp <- income.pp %>% 
+  pivot_longer(-`country`, names_to = "Year", values_to = "income")
+
+co2 <- read.csv("co2_emissions_tonnes_per_person.csv")              ## Vergleichswert 4: co2 emissions per person
+co2 <- co2 %>% 
+  pivot_longer(-`country`, names_to = "Year", values_to = "co2pp")
+
+co2abs <- read.csv("yearly_co2_emissions_1000_tonnes.csv")            ## Vergleichswert 5: co2 emissions absolute
+co2abs <- co2abs %>% 
+  pivot_longer(-`country`, names_to = "Year", values_to = "co2abs")
+
+sugar <- read.csv("sugar_per_person_g_per_day.csv")    ## Vergleichswert 6: suger intake per person per day in gramm
+sugar <- sugar %>% 
+  pivot_longer(-`country`, names_to = "Year", values_to = "sugar")
+
+gini <- read.csv("gini.csv")                                          ## Vergleichswert 7: gini coefficient
+gini <- gini %>% 
+  pivot_longer(-`country`, names_to = "Year", values_to = "gini")
+
+suicide <- read.csv("suicide_per_100000_people.csv")               ## Vergleichswert 8: suicide per 100.000 people
+suicide <- suicide %>% 
+  pivot_longer(-`country`, names_to = "Year", values_to = "suicide")
+
+friends <- read.csv("population_aged_20_39_years_both_sexes_percent.csv") ## Vergleichswert 9: population same age, possible friends
+friends <- friends %>% 
+  pivot_longer(-`country`, names_to = "Year", values_to = "friends20-39")
+
+freedom <- read.csv("freedix_fh.csv")                                 ## Vergleichswert 10: freedom-index
+freedom <- freedom %>% 
+  pivot_longer(-`country`, names_to = "Year", values_to = "freedom")
+```
+
+
+```{r,echo=TRUE, warning=FALSE, message=FALSE}
+## Join der Tabellen ##
+dg <- pop.tot %>% 
+  left_join(life.exp, by = NULL) %>% 
+  left_join(income.pp, by = NULL) %>% 
+  left_join(co2, by = NULL) %>% 
+  left_join(co2abs, by = NULL) %>% 
+  left_join(sugar, by = NULL) %>% 
+  left_join(suicide, by = NULL) %>%
+  left_join(gini, by = NULL) %>%
+  left_join(friends, by = NULL) %>% 
+  left_join(freedom, by = NULL)
+
+## Spalte "Year" bearbeiten
+dg$Year <- dg$Year %>% 
+  str_sub(start = -4, end = -1)
+dg$Year <- dg$Year %>%
+  as.integer()
+
+## Eingrenzung der Daten auf 1970-2019
+dg_limit <- dg %>% 
+  group_by(Year) %>% 
+  filter(Year > 1969, Year < 2013)
+```
+
+Das Ergebnis ist ein Datensatz, anhand dessen sich die beiden Länder Dänemark und Deutschland vergleichen lassen. Die Spalten werden im Folgenden kurz erläutert:  
+> country: Land (Dänemark oder Deutschland)  
+> Year: Jahreszahl von 1969 bis 2013  
+> population: absolute Einwohnerzahl des jeweiligen Landes im jeweiligen Jahr  
+> life.expect: Lebenserwartung der Menschen in Jahren  
+> co2pp: jährliche CO2 Emissionen pro Person in Tonnen  
+> co2abs: absolute jährliche CO2 Emissionen des Landes in Tonnen  
+> sugar: Zuckerkonsum pro Person pro Tag  
+> suicide: Suizidrate des Landes pro 100.000 Einwohner  
+> gini: GINI-Koeffizient ist ein Parameter für Einkommensungleichheit - hohe zahlen bedeuten größere Ungleichheit  
+> friends20-39: Anteil der Bevölkerung in meinem Alter (mögliche zukünftige Freunde im Fall einer Auswanderung)  
+> freedom: Durchschnitt der politischen Rechte und der Bürgerrechte auf deiner Skala von 1 (sehr frei) bis 7 (nicht frei)  
+
+```{r, echo=TRUE}
+head(dg_limit)
+```
+
+Datenbeschaffung 2 - Daten zum intereuropäischen Vergleich
+
+```{r, warning=FALSE, echo=TRUE, message=FALSE}
+
+### Subset: Auswahl europäischer Länder
+european_countrys <- c("Germany", "Denmark", "Sweden", "Norway", "Finland", "United Kingdom",
+                       "Ireland", "Belgium", "Netherlands", "France", "Portugal","Luxembourg",	"Switzerland",
+                       "Spain", "Italy", "Austria", "Greece", "Poland", "Czech Republic", "Iceland", "Croatia")
+
+### Vergleichsdatensatz bauen: 
+life.exp_eur <- read.csv("life_expectancy_years_europe.csv")         # Vergleichswert 1 (oben 2): Life expectancy
+life.exp_eur <- life.exp_eur %>% filter(country %in% european_countrys)   # auf einige europ. Länder beschränken
+life.exp_eur <- as_tibble(life.exp_eur)                  # als Tibble gucken, warum nicht pivotisiert werden kann
+life.exp_eur$X1800 <- NULL                                              # Problemspalte droppen
+life.exp_eur <- life.exp_eur %>% pivot_longer(-`country`, names_to = "Year", values_to = "life.exp_eur") # pivot
+life.exp_eur <- as_data_frame(life.exp_eur)                      # wieder als Data Frame weiterbearbeiten
+
+# 2. Bevölkerung
+pop.eur <- read.csv("population_tot.eur.csv")
+pop.eur$X1800 <- NULL
+pop.eur <- pop.eur %>% pivot_longer(-`country`, names_to = "Year", values_to = "pop.eur")
+
+# 3. Einkommen
+income.eur <- read.csv("income_per_person_eur.csv")
+income.eur$X1800 <- NULL
+income.eur <- income.eur %>% 
+  pivot_longer(-`country`, names_to = "Year", values_to = "income.eur")
+
+# 4. co2 per person
+co2pp_europe <- read.csv("co2_emissions_tonnes_per_person_europe.csv")
+co2pp_europe$X1800 <- NULL
+co2pp_europe <- co2pp_europe %>% 
+  pivot_longer(-`country`, names_to = "Year", values_to = "co2pp_eur")
+
+# 5. co2 absolut
+co2abs_europe <- read.csv("yearly_co2_absolut_eur.csv")
+co2abs_europe$X1751 <- NULL
+co2abs_europe <- co2abs_europe %>% 
+  pivot_longer(-`country`, names_to = "Year", values_to = "co2abs_eur")
+
+# 6. Zuckerkonsum
+sugar_eur <- read.csv("sugar_eur.csv")
+sugar_eur$X1961 <- NULL
+sugar_eur <- sugar_eur %>% 
+  pivot_longer(-`country`, names_to = "Year", values_to = "sugar_eur")
+
+# 7. Suizidfälle auf 100.000 Einwohner
+suicide_eur <- read.csv("suicide_eur.csv")
+suicide_eur <- suicide_eur %>% 
+  pivot_longer(-`country`, names_to = "Year", values_to = "suicide_eur")
+
+# 8. GINI Koeffizient
+gini_eur <- read.csv("gini_europe.csv")
+gini_eur$X1800 <- NULL
+gini_eur <- gini_eur %>% 
+  pivot_longer(-`country`,names_to = "Year", values_to = "gini_eur")
+
+# 9. mögliche Freunde - Einwohner in meinem Alter
+friends_eur <- read.csv("friends_eur.csv")
+friends_eur$X1950 <- NULL
+friends_eur <- friends_eur %>% 
+  pivot_longer(-`country`, names_to = "Year", values_to = "friends_eur")
+
+# 10. Freiheitsindex
+freedom_eur <- read.csv("freedix_fh_eur.csv")
+freedom_eur$X1972 <- NULL
+freedom_eur <- freedom_eur %>% 
+  pivot_longer(-`country`, names_to = "Year", values_to = "freedom_eur")
+
+europa <- life.exp_eur %>% 
+  inner_join(pop.eur) %>% 
+  inner_join(income.eur) %>% 
+  inner_join(co2pp_europe) %>% 
+  inner_join(co2abs_europe) %>% 
+  inner_join(sugar_eur) %>% 
+  inner_join(suicide_eur) %>% 
+  inner_join(gini_eur) %>% 
+  inner_join(friends_eur) %>% 
+  inner_join(freedom_eur)
+
+## Spalte Jahre glattziehen
+europa$Year <- europa$Year %>% 
+  str_sub(start = -4, end = -1)
+europa$Year <- europa$Year %>%
+  as.integer()
+
+## Eingrenzung der Daten auf 1970-2019
+europa_limit <- europa %>% 
+  group_by(Year) %>% 
+  filter(Year > 1969, Year < 2020)
+
+```
+Insgesamt ergab sich daraus der unten dargestellte Data Frame. Die Spalten decken sich inhaltlich mit denen aus dem Datensatz 1.  
+
+```{r, echo=TRUE}
+head(europa_limit)
+```
+
+## Erarbeitung eines eigenen Themes
+
+Ein wichtiger Bestandteil eines jeden Plots ist das Theme, das oft nur stiefmütterlich im Default benutzt wird. Dabei gibt es vielfältige Möglichkeiten, mit dem Theme die Aussagen der Visualisierung zu stärken. Viele bekannte Zeitungen (auch online) benutzen markante Themes, um den Wiedererkennungswert der eigenen Darstellungen zu steigern. 
+Das Theme personalisieren zu können ist also ein wichtiger Bestandteil des Plotting-Skills. 
+
+Da in Dänemark ein Style aus Minimalismus und Gemütlichkeit (genannt Hygge) allgegenwärtig ist, habe ich auf der Basis des theme_bw() ein passendes, skandinavisch anmutendes Theme erstellt. 
+```{r,echo=TRUE}
+theme_hygge <- function(){
+  theme_bw() %+replace%                # Theme_bw als Basistheme, an dem ich Veränderungen vornehme
+    theme(
+      axis.title = element_text(size = 16, family = "mono", colour = "grey30"),    #Änderung der Schriftart und Farbe
+      plot.title = element_text(color = "grey30", family = "mono", size = 20),
+      plot.background = element_rect(fill = "azure"),                              #Änderung des grundlegenden Farbschemas
+      panel.background = element_rect(fill = "azure2"),
+      panel.grid.minor = element_line(size = 1, linetype = 'solid', color =  "azure"), #Änderung der Gitterlinien
+      legend.background = element_blank(),                  #nahtlose Einpassung der Legende in den Hintergrund
+      legend.key = element_blank(),                         # Modifizierung der Legende
+      legend.text = element_text(size = 12, family = "mono", colour = "grey30"),
+      legend.title = element_text(size = 16, family = "mono", colour = "grey30"),
+      legend.position = "bottom"
+    )
+}
+
+theme_set(theme_hygge)
+```
+
+## Plots
+
+### 1. Lebensqualität
+
+In Dänemark haben die Menschen eine etwa gleich hohe Lebenserwartung wie in Deutschland. Allerdings ist dieser Zustand für die Dänen noch recht neu. Von 1985 bis 2014 lebten die Deutschen länger. 
+Es scheint angebracht, statistisch zu untersuchen, ob ein signifikanter Zusammenhang zwischen dem wachsenden Einkommen im Laufe der Zeit und dem Anstieg der Lebenserwartung besteht.  
+
+Fazit: Deutschland 1:1 Dänemark
+```{r, echo=TRUE, warning=FALSE}
+theme_set(theme_hygge())
+dg_limit %>%  
+  ggplot(aes(x = Year, y = life.expect)) +
+  labs(title = "Lebenserwartung", x = "Lebenserwartung in Jahren", y = "Alter") +
+   geom_point(mapping = aes(colour = country, size = income)) 
+
+```
+### 2. Lebensqualität im euopäischen Vergleich
+
+Bei nahezu allen europäischen Lädern ist ein Zusammenhang zwischen Einkommensanstieg und einer höheren Lebenserwartung zu erkennen. 
+Dänemark und Deutschland halten sich dabei eher im Mittelfeld. Hier fällt Luxemburg durch ein ungewöhnlich hohes mittleres Einkommen auf. Die östlichen Länder stechen dagegen mit einer geringen Lebenserwartung heraus. 
+
+Fazit: Deutschland 2:2 Dänemark
+```{r, echo=TRUE, warning=FALSE}
+
+europa_limit %>% filter(Year < 2014, Year > 2003) %>% 
+  ggplot(aes(x = income.eur, y = life.exp_eur)) + 
+  geom_point(aes(color = Year)) +
+  geom_path(aes(group = country, color = Year)) +
+  lims(x = c(15000, 70000)) +
+  labs(title = "Lebensqualität", x = "Jährliches Einkommen in Euro", y = "Lebenserwartung", color = "Jahr") + 
+  theme(legend.position = "right")
+## hier hat Label_repel nicht funktioniert
+
+``` 
+### 3. Zuckerkonsum
+
+Aus der gesundheitlichen Perspektive scheint es nicht angeraten, auszuwandern, da die Dänen noch mehr Zucker pro Tag zu sich nehmen als die Deutschen.
+Bemerkenswert ist, dass in Dänemark sowohl einkommensschwächere als auch einkommensstarke Schichten mehr Zucker verzehren als mittelmäßig verdienende Personen. 
+
+Fazit: Deutschland 3:2 Dänemark
+```{r, echo=TRUE, warning=FALSE}
+
+dg_limit %>%  
+  ggplot(aes(x = income, y = sugar, group = country)) +
+  labs(title = "Zuckerkonsum", x = "Einkommen", y = "Zuckerkonsum in g pro Person") +
+  geom_smooth(aes(color = country), level = 0.8)
+
+```
+
+
+
+## 4. Emissionen
+
+Dänemark und Deutschland sind keine klimafreundlichen Länder. Die Betrachtung des CO2-Ausstoßes pro Kopf ist jeweils höher als der europäische Durchschnitt. Klimafreudnlichlebt man eher in Kroatien oder Portugal. Keine Punkte für niemanden hier. 
+
+Fazit: Deutschland 3:2 Dänemark
+```{r, echo=TRUE, warning=FALSE}
+europa_limit %>% filter(Year == 2013) %>% 
+  ggplot() +
+  geom_bar(stat = "identity", mapping = aes(x = country, y = co2pp_eur)) +
+  geom_hline(aes(yintercept = mean(co2pp_eur), color = "orangered4")) +
+  labs(title = "Emissionen", x = "Länder", y = "Co2 Ausstoß pro Kopf pro Jahr in t", color = "Mittelwert") +
+  theme(legend.text = element_blank()) +
+  coord_flip()
+```
+
+
+## 5. Suizidrate
+
+Obwohl es in Dänemark einen großen Teil des Jahres dunkler ist als in Deutschland, sind die Suizidkurven insbesondere seit den 2000er Jahren durchaus miteinander vergleichbar auf einem niedrigen Stand.
+
+Fazit: Deutschland 4:3 Dänemark
+```{r, echo=TRUE, warning=FALSE}
+dg_limit %>% filter(Year > 1989) %>% 
+  ggplot() +
+  geom_line(aes(x = Year, y = suicide, group = country, color = country, )) +
+  labs(title = "Suizidrate", x = "Jahr", y = "Suizidfälle auf 100.000 Einwohner")
+  
+```
+Es war ein knappes Rennen, aber am Ende lohnt es sich wohl nicht, auszuwandern. 
+
+
+## Quellen
+
+**Theme-Bearbeitung:**   
+http://www.sthda.com/english/wiki/ggplot2-themes-and-background-colors-the-3-elements
+
+https://joeystanley.com/blog/custom-themes-in-ggplot2
+
+https://stackoverflow.com/questions/34522732/changing-fonts-in-ggplot2
+
+**Allgemein:**  
+Roger D. Peng, Sean Kross, and Brooke Anderson. 2017. Mastering Software Development in R. https://bookdown.org/rdpeng/RProgDA/
